@@ -34,4 +34,12 @@ func main() {
 	g := make([]int, len(f))
 	copy(f, g) // 将f复制到g
 	fmt.Println(e, f, g)
+
+	//三索引切片
+	h := [...]string{"aaa", "bbb", "ccc", "ddd", "eee"}
+	i := h[1:3]                    //bbb ccc
+	fmt.Println(i, len(i), cap(i)) // [bbb ccc] 2 4
+	//开始索引，结束索引，容量限制索引
+	j := h[1:3:3]
+	fmt.Println(j, len(j), cap(j)) // [bbb ccc] 2 2
 }

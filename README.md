@@ -370,7 +370,7 @@ func main() {
 
 ## 切片 silce
 
-> 切片（slice）是建立在数组之上的更方便，更灵活，更强大的数据结构。切片并不存储任何元素而只是对现有数组的引用。
+> 切片（slice）是建立在数组之上的更方便，更灵活，更强大的数据结构（窗口，视图）。切片并不存储任何元素而只是对现有数组的引用。
 
 
 
@@ -421,6 +421,54 @@ func main() {
 	g := make([]int, len(f))
 	copy(f, g) // 将f复制到g
 	fmt.Println(e, f, g)
+
+	//三索引切片
+	h := [...]string{"aaa", "bbb", "ccc", "ddd", "eee"}
+	i := h[1:3]                    //bbb ccc
+	fmt.Println(i, len(i), cap(i)) // [bbb ccc] 2 4
+	//开始索引，结束索引，容量限制索引
+	j := h[1:3:3]
+	fmt.Println(j, len(j), cap(j)) // [bbb ccc] 2 2
+}
+```
+
+
+
+## map
+
+```go
+package main
+
+import "fmt"
+
+// map 作为参数时 是引用传递。在其他方法中修改 会影响原map (赋值同理)
+func fun1(m map[string]string) {
+	m["guangzhou"] = "gz"
+}
+
+func main() {
+	// 定义map
+	a := map[string]string{
+		"shanghai": "sh",
+		"beijing":  "bj",
+		"shenzhen": "sz",
+	}
+	fmt.Println(a)
+	fun1(a)
+	fmt.Println(a)
+
+	// 访问不存在的key，value会返回该数据类型的默认值
+	fmt.Println("wuhan=", a["wh"])
+
+	if m, ok := a["wuhan"]; ok {
+		fmt.Println(m)
+	} else {
+		fmt.Println("wuhan not found...")
+	}
+
+	// 删除map中的key
+	delete(a, "guangzhou")
+	fmt.Println(a)
 }
 ```
 
