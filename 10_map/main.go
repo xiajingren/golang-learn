@@ -20,7 +20,7 @@ func main() {
 
 	// 访问不存在的key，value会返回该数据类型的默认值
 	fmt.Println("wuhan=", a["wh"])
-
+	// 用 ok 来判断 key 是否存在
 	if m, ok := a["wuhan"]; ok {
 		fmt.Println(m)
 	} else {

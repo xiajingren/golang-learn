@@ -253,9 +253,9 @@ func main() {
 
 ## 方法 method
 
-在其他面向对象语言里，方法属于类。
-
-在Go里，提供了方法，但是没有提供类和对象，Go中的方法是与类型进行关联。
+> 在其他面向对象语言里，方法属于类。
+>
+> 在Go里，提供了方法，但是没有提供类和对象，Go中的方法是与类型进行关联。
 
 ```go
 package main
@@ -459,7 +459,7 @@ func main() {
 
 	// 访问不存在的key，value会返回该数据类型的默认值
 	fmt.Println("wuhan=", a["wh"])
-
+	// 用 ok 来判断 key 是否存在
 	if m, ok := a["wuhan"]; ok {
 		fmt.Println(m)
 	} else {
@@ -471,6 +471,23 @@ func main() {
 	fmt.Println(a)
 }
 ```
+
+
+
+## 结构体 struct
+
+> Go和其他经典语言不同，它没有class，没有对象，也没有继承。
+>
+> 但是Go提供了struct和方法。
+
+- 构造函数（并非传统意义的构造函数，只是用来构造数据的一个函数）
+  - 可以使用struct复合字面值来初始化你所需要的数据。
+  - 但如果struct初始化的时候还要做很多事情，那就可以考虑写一个构造用的函数。
+  - Go没有专用的构造函数，但以new或者New开头的函数，通常是用来构造数据的。例如：newPerson()，NewPerson()。
+- New函数
+  - 有一些用于构造的函数的名称就是New（例如errors包里面的New函数）。
+  - 这是因为函数调用时使用 包名.函数名 的形式。
+  - 如果该函数叫NewError，那么调用的时候就是errors.NewError()，这就不如errors.New()简洁。
 
 
 
