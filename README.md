@@ -559,5 +559,175 @@ func main() {
 
 
 
+## 组合 composition
+
+- 在面向对象的世界中，对象由更小的对象组合而成。
+- Go通过结构体实现组合（**composition**）
+- Go提供了“嵌入”（**embedding**）特性，它可以实现方法的转发（**forwarding**）
+
+- 凡是 **继承** 能实现的功能，通过 **组合** 都能实现。
+- 组合是一种更简单、灵活的方式。
+
+
+
+```go
+package main
+
+import "fmt"
+
+// type computer struct {
+// 	model    string
+// 	keyboard keyboard
+// 	mouse    mouse
+// }
+
+type computer struct {
+	model    string
+	keyboard // 嵌入  (只写类型名 可以嵌入预申明类型int string ...)
+	mouse    // 嵌入
+}
+
+type keyboard struct {
+	name         string
+	model        string
+	NumberOfKeys int
+}
+
+type mouse struct {
+	name  string
+	model string
+	dpi   int
+}
+
+func (keyboard) input() {
+	fmt.Println("input...")
+}
+
+func (mouse) click() {
+	fmt.Println("click...")
+}
+
+func (keyboard) info() {
+	fmt.Println("keyboard info...")
+}
+
+func (mouse) info() {
+	fmt.Println("mouse info...")
+}
+
+//转发到mouse的info方法
+func (c computer) info() {
+	c.mouse.info()
+}
+
+func main() {
+	m := mouse{name: "mouse1", model: "m-001", dpi: 1000}
+	fmt.Printf("%+v\n", m)
+	k := keyboard{name: "keyboard1", model: "k-001", NumberOfKeys: 112}
+	fmt.Printf("%+v\n", k)
+	c := computer{model: "c-001", mouse: m, keyboard: k}
+	fmt.Printf("%+v\n", c)
+
+	// c.mouse.click()  //方法转发
+	// c.keyboard.input()  //方法转发
+
+	c.click()                  //通过嵌入 方法转发
+	c.input()                  //通过嵌入 方法转发
+	fmt.Printf("%+v\n", c.dpi) //也可以转发属性
+
+	//当嵌入转发的方法(属性)出现重名时，自身的方法(属性)优先级高于转发的方法。
+	//c.mouse.info()
+	c.keyboard.info()
+	// mouse 和 keyboard 都有info方法，如果使用 c.info 会发生歧义（不确定是调用mouse的还是keyboard的）
+	//如果非要通过c.info访问mouse的info方法，那么给computer关联一个info方法，然后转发到mouse的info方法
+	c.info()
+}
+```
+
+
+
+> 优先使用对象组合，而不是类的继承。
+>
+> 对传统的继承不是必须的；所有使用继承能解决的问题都可以通过其他方法解决。
+
+
+
+## 接口 interface
+
+- 接口关注于类型可以做什么，而不是储存了什么。
+- 接口通过列举类型必须满足的一组方法来进行声明。
+- 在Go语言中，不需要显式声明接口。
+
+**接口类型**
+
+- 为了复用，通常会把接口声明为类型。
+- 按约定接口名称通常以 er 结尾。
+- 接口可以与struct嵌入特性一同使用。
+- 同时使用组合和接口将构成非常强大的设计工具。
+
+**满足接口**
+
+- Go标准库导出了很多只有单个方法的接口。
+- Go通过简单的、通常只有单个方法的接口......来鼓励组合而不是继承，这些接口在各个组件之间形成了简明易懂的界限。
+
+
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+// 定义一个接口变量
+var t interface {
+	talk() string
+}
+
+// 定义结构体
+type imp1 struct{}
+type imp2 struct{}
+
+//为imp1关联talk方法
+func (imp1) talk() string {
+	return "imp1"
+}
+
+//为imp2关联talk方法
+func (imp2) talk() string {
+	return "imp2"
+}
+
+// 声明接口类型
+type talker interface {
+	talk() string
+}
+
+func shout(talk talker) {
+	fmt.Println(talk.talk())
+}
+
+type starship struct {
+	imp1 // 嵌入 imp1 类型
+}
+
+func main() {
+	t = imp1{} //imp1满足t这个接口
+	fmt.Println(t.talk())
+	t = imp2{} //imp2满足t这个接口
+	fmt.Println(t.talk())
+
+	imp1 := imp1{} //imp1满足talker这个接口
+	shout(imp1)
+	imp2 := imp2{} //imp2满足talker这个接口
+	shout(imp2)
+
+	// 因为 starship 嵌入了 imp1 类型，所以转发了 talk 方法
+	s := starship{}
+	fmt.Println(s.talk()) //所以 starship 可以直接调用 talk 方法
+	shout(s)              //所以 starship 满足了 talker 这个接口，所以可以把 s 直接传给 shout 方法
+}
+```
+
 
 
