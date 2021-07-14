@@ -731,3 +731,164 @@ func main() {
 
 
 
+## 指针 pointers
+
+**什么是指针**
+
+- 指针是指向另一个变量地址的变量。
+- Go语言的指针同时也强调安全性，不会出现迷途指针（dangling pointers）
+
+**& 和 * 符号**
+
+- 变量会将它们的值存储在计算机的RAM里，存储位置就是该变量的内存地址。
+- & 表示地址操作符，通过 & 可以获得变量的内存地址。
+- & 操作符无法获得字符串、数值、布尔字面值的地址。
+  - &42 ，&"hello" 这些都会导致编译器报错。
+- *操作符与&的作用相反，它用来解引用，提供内存地址指向的值。
+
+**注意**
+
+- C语言中的内存地址可以通过例如 address++ 这样的指针运算进行操作，但是在Go里面不允许这种不安全操作。
+
+**指针类型**
+
+- 指针存储的是内存地址。
+- 指针类型和其他普通类型一样，出现在所有需要用到类型的地方，如变量申明、函数形参、返回值类型、结构体字段等。
+
+**指向结构体的指针**
+
+- 与字符串和数值不一样，复合字面值的前面可以放置 & 符号。
+- 访问字段时，对结构体指针进行解引用并不是必须的（自动解引用）。
+
+**指向数组的指针**
+
+- 和结构体一样,可以把 & 放在数组的复合字面值前面来创建指向数组的指针。
+- 数组在执行索引或切片操作时会自动解引用。没有必要写(*superpower)[0]这种形式。
+- 与C语言不一样，Go里面数组和指针是两种完全独立的类型。
+- Slice和map的复合字面值前面也可以放置&操作符,但是Go并没有为它们提供自动解引用的功能。
+
+**实现修改**
+
+- Go语言的函数和方法都是按值传递参数的，这意味着函数总是操作于被传递参数的副本。
+- 当指针被传递到函数时，函数将接收传入的内存地址的副本。之后函数可以通过解引用内存地址来修改指针指向的值。
+
+**指针接收者**
+
+- 方法的接收者和方法的参数在处理指针方面是很相似的。
+
+- Go语言在变量通过点标记法进行调用的时候，自动使用 & 取得变量的内存地址。
+
+  **注意**
+
+  - 使用指针作为接收者的策略应该始终如一。
+  - 如果一种类型的某些方法需要用到指针作为接收者，就应该为这种类型的所有方法都是用指针作为接收者。
+
+**内部指针**
+
+- Go语言提供了内部指针这种特性。
+- 它用于确定结构体中指定字段的内存地址。
+- & 操作符不仅可以获得结构体的内存地址，还可以获得结构体中指定字段的内存地址。
+
+**隐式指针**
+
+- Go语言里一些内置的集合类型就在暗中使用指针。
+
+- map在被赋值或者呗作为参数传递的时候不会被复制。
+
+  - map就是一种隐式指针
+
+  - 这种写法就是多此一举: func demolishplanets*map[string]string)
+
+- map的键和值都可以是指针类型。
+
+- 需要将指针指向map的情况并不多见。
+
+**slice指向数组**
+
+- slice是指向数组的窗口，实际上slice在指向数组元素的时候也使用了指针。
+- 每个slice内部都会被表示为一个包含3个元素的结构，它们分别指向:
+  - 数组的指针
+  - slice的容量
+  - slice的长度
+- 当slice被直接传递至函数或方法时，slice的内部指针就可以对底层数据进行修改。
+
+- 指向slice的显式指针的唯一作用就是修改slice本身: slice的长度、容量以及起始偏移量。
+
+
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+type person struct {
+	name, superpower string
+	age              int
+}
+
+func main() {
+	answer := 42
+	address := &answer
+	fmt.Println(address, *address)
+	fmt.Printf("%T\n", address)
+
+	// 指针指向的变量发生变化，指针解引用的值也会跟着变化
+	answer = 43
+	fmt.Println(*address)
+
+	// 修改指针解引用的值，原变量也会变化
+	*address = 44
+	fmt.Println(answer)
+
+	// 两个指针指向同一个地址时，它们相互影响
+	address1 := address
+	*address1 = 45
+	fmt.Println(*address, *address1)
+	// 2个指针指向的地址相等，那么它们就是相等的
+	fmt.Println(address == address1)
+
+	// 指针解引用赋给另一个变量，相当于是复制了一份副本，此时两个变量互不影响
+	answer1 := *address
+	*address = 46
+	fmt.Println(answer1, *address)
+
+	timmy := &person{
+		name: "Timothy",
+		age:  10,
+	}
+	//(*timmy).superpower = "flying"
+	// 访问字段时，对结构体指针进行解引用并不是必须的
+	timmy.superpower = "flying" // 和上一行 等效
+	fmt.Printf("%+v\n", timmy)
+
+	// 指向数组的指针
+	superpowers := &[3]string{"flight", "invisibilisy", "super strength"}
+	fmt.Println(superpowers[0])
+	fmt.Println(superpowers[1:2])
+
+	rebecca := person{
+		name:       "Rebecca",
+		superpower: "imagination",
+		age:        14,
+	}
+	birthday(&rebecca)
+	fmt.Printf("%+v\n", rebecca)
+
+	//(&rebecca).birthday()
+	rebecca.birthday() // 和上一行 等效
+	fmt.Printf("%+v\n", rebecca)
+}
+
+func birthday(p *person) {
+	p.age++
+}
+
+func (p *person) birthday() {
+	p.age++
+}
+```
+
+
+
