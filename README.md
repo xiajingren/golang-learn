@@ -894,5 +894,597 @@ func (p *person) birthday() {
 
 ## goroutine / channel
 
+```go
+package main
+
+import (
+	"fmt"
+	"math/rand"
+	"time"
+)
+
+func main() {
+	// 创建通道
+	c := make(chan int)
+
+	// 开启 5 个 goroutine 、 使用 go 关键字
+	for i := 0; i < 5; i++ {
+		go sleepyGopher(i, c) // 开启一个 goroutine 不会阻塞
+	}
+
+	// 从通道接收 5 次
+	for i := 0; i < 5; i++ {
+		gopherId := <-c // 从通道 c 接收数据，会阻塞。可以用于判断 goroutine 是否执行完毕（有点像 await）
+		fmt.Println("gopher ", gopherId, " has finished sleeping")
+	}
+
+	fmt.Println("=======================================")
+
+	c1 := make(chan int)
+	// time.After 返回一个通道，该通道在指定时间后会接收到一个值，发送该值的 goroutine 是 go 运行时的一部分
+	timeout := time.After(2 * time.Second)
+	for i := 0; i < 5; i++ {
+		go sleepyGopher1(i, c1)
+	}
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 5; i++ {
+		select {
+		case gopherId := <-c1: // 从 c1 通道等待一个值
+			fmt.Println("gopher ", gopherId, " has finished sleeping")
+		case <-timeout: // c1 通道 2s 没有值则会走此 case
+			fmt.Println("my patience ran out")
+			//return
+		}
+	}
+
+	fmt.Println("=======================================")
+	c2 := make(chan int)
+	go sleepyGopher2(c2)
+	// 使用 range 关键字 从通道接收数据，直到通道被关闭
+	for a := range c2 {
+		fmt.Println(a)
+	}
+
+	fmt.Println("end...")
+}
+
+func sleepyGopher(id int, c chan int) {
+	time.Sleep(3 * time.Second) // 休眠 3s
+	fmt.Println("...", id, " snore ...")
+	c <- id // 将 id 发送到通道 c 代表当前方法执行完毕
+}
+
+func sleepyGopher1(id int, c chan int) {
+	time.Sleep(time.Duration(rand.Intn(4000)) * time.Millisecond) // 随机休眠
+	fmt.Println("...", id, " snore ...")
+	c <- id // 将 id 发送到通道 c 代表当前方法执行完毕
+}
+
+func sleepyGopher2(c chan int) {
+	for i := 0; i < 5; i++ {
+		time.Sleep(time.Duration(rand.Intn(4000)) * time.Millisecond) // 随机休眠
+		fmt.Println("...", i, " snore ...")
+		c <- i // 将 id 发送到通道 c 代表当前方法执行完毕
+	}
+	close(c)
+}
+
+```
+
+
+
+# golang web开发
+
+## hello word
+
+```go
+package main
+
+import "net/http"
+
+func main() {
+	http.HandleFunc("/", func(rw http.ResponseWriter, r *http.Request) {
+		rw.Write([]byte("hello word !"))
+	})
+
+	http.ListenAndServe(":8080", nil) // DefaultServeMux
+}
+```
+
+- 处理请求
+
+  ![image-20210902120837483](README.assets/image-20210902120837483.png)
+  Handler 为每个 http 请求创建一个 goroutine
+
+## 创建 Web Server
+
+```go
+package main
+
+import "net/http"
+
+func main() {
+	// 方法1 实际上是调用了 http.Server这个结构体 的 ListenAndServe方法
+	//http.ListenAndServe(":8080", nil)
+	//http.ListenAndServeTLS ...
+
+	// 方法2 配置更灵活
+	server := http.Server{
+		Addr:    ":8080",
+		Handler: nil,
+	}
+	server.ListenAndServe()
+	//server.ListenAndServeTLS ...
+
+	// 以上2种方法是等效的
+}
+```
+
+## Handler
+
+```go
+type Handler interface {
+	ServeHTTP(ResponseWriter, *Request)
+}
+```
+
+- handler 是一个接口（interface）
+- handler 定义了一个方法 ServeHTTP()
+  - 参数1：HTTPResponseWriter
+  - 参数2：指向 Request 这个 struct 的指针
+
+### DefaultServeMux
+
+- 是一个 Multiplexer 多路复用器
+- 也是一个 Handler
+
+![image-20210902134946202](README.assets/image-20210902134946202.png)
+
+### 自定义 Handler
+
+```go
+package main
+
+import "net/http"
+
+type myHandler struct{}
+
+func (m myHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
+	rw.Write([]byte("myHandler"))
+}
+
+func main() {
+	// 使用自定义Handler
+	mh := myHandler{}
+	server := http.Server{
+		Addr:    ":8080",
+		Handler: mh,
+	}
+	server.ListenAndServe()
+}
+
+```
+
+#### 为不同的路径指定不同的 Handler
+
+- http.Handle
+  - 第2个参数是 Handler
+- http.HandleFunc
+  - 第2个参数是 Handler 函数
+  - HandlerFunc 可以把 Handler 函数转化为 Handler
+  - 内部还是调用的 http.Handle
+
+```go
+package main
+
+import "net/http"
+
+type myHandler struct{}
+
+func (m myHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
+	rw.Write([]byte("myHandler"))
+}
+
+func main() {
+	mh := myHandler{}
+	server := http.Server{
+		Addr:    ":8080",
+		Handler: nil, //使用 DefaultServeMux
+	}
+	// 为路径 /my 指定 handler
+	http.Handle("/my", mh)
+	// 使用 http.HandleFunc，http.HandleFunc内部使用http.HandlerFunc类型转换（http.HandlerFunc是一个函数类型，本身就是一个handler），将具有适当签名的函数转换为一个handler 本质还是调用 http.Handle
+	http.HandleFunc("/home", func(rw http.ResponseWriter, r *http.Request) {
+		rw.Write([]byte("home"))
+	})
+	server.ListenAndServe()
+}
+
+```
+
+### 内置的 Handlers
+
+- NotFoundHandler
+
+- RedirectHandler
+
+- StripPrefix
+
+- TimeoutHandler
+
+- FileServer
+
+  ```go
+  package main
+  
+  import "net/http"
+  
+  func main() {
+  	// 静态文件 server
+  
+  	// 1
+  	// http.HandleFunc("/", func(rw http.ResponseWriter, r *http.Request) {
+  	// 	http.ServeFile(rw, r, "wwwroot"+r.URL.Path)
+  	// })
+  	// http.ListenAndServe(":8080", nil)
+  
+  	// 2
+  	http.ListenAndServe(":8080", http.FileServer(http.Dir("wwwroot")))
+  }
+  
+  ```
+
+## Request
+
+- Request（是个 struct），代表了客户端发送的 HTTP 请求消息
+- 重要的字段
+  - URL
+  - Header
+  - Body
+  - Form/PostForm/MultipartForm
+
+```go
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+)
+
+type Person struct {
+	Name string
+	Tags []string
+}
+
+func main() {
+	http.HandleFunc("/post", func(rw http.ResponseWriter, r *http.Request) {
+		// 读取查询参数
+		fmt.Fprintln(rw, r.URL.RawQuery)
+		fmt.Fprintln(rw, r.URL.Query())
+		fmt.Fprintln(rw, r.URL.Query()["id"])
+		fmt.Fprintln(rw, r.URL.Query().Get("id"))
+
+		// 读取 Hander 参数
+		fmt.Fprintln(rw, r.Header)
+		fmt.Fprintln(rw, r.Header["My-Header"])
+		fmt.Fprintln(rw, r.Header.Get("My-Header"))
+
+		// 读取 request body 内容
+		body := make([]byte, r.ContentLength)
+		r.Body.Read(body)
+		fmt.Fprintln(rw, string(body))
+
+		// r.ParseForm()
+		// r.Form["key"]
+		// r.FormValue("key")
+		// r.PostForm["key"]
+		// r.PostFormValue("key")
+		// r.FormFile("key")
+
+		// r.ParseMultipartForm(1024)
+		// r.MultipartForm["key"]
+		// r.MultipartForm.File["uploadfile"][0].Open()
+
+		// r.MultipartReader() // 以 steam 读取
+	})
+
+	// 返回 json 数据
+	http.HandleFunc("/json", func(rw http.ResponseWriter, r *http.Request) {
+		rw.Header().Set("Content-Type", "application/json")
+		p := &Person{
+			Name: "haha",
+			Tags: []string{"aa", "bb", "cc"},
+		}
+		j, _ := json.Marshal(p)
+		//rw.WriteHeader(http.StatusOK)
+		rw.Write(j)
+	})
+
+	http.ListenAndServe(":8080", nil)
+}
+
+```
+
+## ResponseWriter
+
+ResponseWriter 是一个接口，handler 用它来返回响应
+
+真正支撑 ResponseWriter 的幕后 struct 是非导出的 http.response
+
+![image-20210903141154948](README.assets/image-20210903141154948.png)
+
+http.response 的指针实现了 ResponseWriter 这个接口，所以 ResponseWriter 代表了 http.response 的指针，所以 w 本质上也是一个指针，按引用传递
+
+![image-20210903141344690](README.assets/image-20210903141344690.png)
+
+### 内置响应
+
+- http.NotFound
+- http.ServeFile
+- http.ServeContent
+- http.Redirect
+
+## 模板
+
+![image-20210903142101575](README.assets/image-20210903142101575.png)
+
+- 模板必须是可读的文本格式，扩展名任意。对于web应用通常就是html
+- text/template    通用模板引擎
+- html/template    html模板引擎
+- 模板内嵌的命令叫做 action
+  - {{ . }}    这里的 “.” 就是一个 action 
+  - 它可以命令模板引擎将其替换成一个值
+
+```go
+package main
+
+import (
+	"net/http"
+	"text/template"
+)
+
+func main() {
+	server := http.Server{
+		Addr: ":8080",
+	}
+
+	http.HandleFunc("/hello", func(rw http.ResponseWriter, r *http.Request) {
+		t, _ := template.ParseFiles("template/index.html")
+		t.Execute(rw, "Hello Word!")
+	})
+
+	server.ListenAndServe()
+}
+
+```
+
+### 模板解析
+
+- ParseFiles
+
+  解析模板文件（可以多个）
+
+- ParseGlob
+
+  解析所有符合规则的模板文件
+
+- Parse
+
+  直接解析字符串。ParseFiles、ParseGlob最终都会调用Parse
+
+```go
+// 1
+// t := template.New("index.html")
+// t, _ = t.ParseFiles("template/index.html")
+
+// 2
+t, _ := template.ParseFiles("template/index.html")
+
+// 3 解析所有符合规则的模板
+//t, _ := template.ParseGlob("template/*.html")
+
+// 4 直接解析字符串
+// t := template.New("index.html")
+// t.Parse("<html><head><title>Document</title></head><body>{{.}}</body></html>")
+```
+
+- Lookup 方法
+
+  通过模板名来寻找模板，如果没有找到就返回nil
+
+- Must 函数
+
+  可以包裹一个函数，返回一个模板的指针和一个错误
+
+  如果错误不为nil，程序就会panic
+
+  用于程序启动时监测
+
+### 模板执行
+
+- Execute
+
+  适用于单个模板，模板集时只用第一个模板
+
+- ExecuteTemplate
+
+  适用于模板集，可以指定使用的模板名
+
+```go
+package main
+
+import (
+	"log"
+	"net/http"
+	"text/template"
+)
+
+func main() {
+	ts := loadTemplates()
+	http.HandleFunc("/", func(rw http.ResponseWriter, r *http.Request) {
+		filename := r.URL.Path[1:]
+		t := ts.Lookup(filename)
+		if t != nil {
+			err := t.Execute(rw, "hello word!")
+			if err != nil {
+				log.Fatalln(err.Error())
+			}
+		} else {
+			http.NotFound(rw, r)
+		}
+	})
+
+	http.Handle("/css/", http.FileServer(http.Dir("static")))
+	http.Handle("/img/", http.FileServer(http.Dir("static")))
+
+	http.ListenAndServe(":8080", nil)
+}
+
+func loadTemplates() *template.Template {
+	ts := template.New("templates")
+	template.Must(ts.ParseGlob("templates/*.html"))
+	return ts
+}
+```
+
+### Action
+
+```go
+{{ . }}
+
+// 条件 action
+{{ if . }}
+
+{{ else }}
+
+{{ end }}
+
+// 循环、迭代 action
+{{ range . }}
+	{{ . }} // 代表 item
+{{ else }}
+    no data // 回落机制 循环无数据时走else
+{{ end }}
+
+// 设置 action
+{{ with "word" }} // 将 . 暂时设置为别的值
+	
+{{ else }} // 回落机制
+    
+{{ end }}
+
+// 包含 action
+{{ template "name" arg }} // 在一个模板中包含其他模板 传入 arg 参数
+
+// 定义 action
+{{ define "name" }}
+	<html></html> ...
+{{ end }}
+
+// block
+{{ block "name" arg }}
+	xxx  // 如果找不到 name 模板，则输出
+{{ end }}
+```
+
+### 自定义函数
+
+```go
+ts := template.New("templates")
+ts.Funcs(template.FuncMap{"myfunc": func(s string) string {
+	return s + "..."
+}})
+
+ts.ParseFiles...
+
+// 使用
+{{ . | myfunc}}
+```
+
+### 组合模板
+
+```go
+package main
+
+import (
+	"net/http"
+	"text/template"
+)
+
+func main() {
+	http.HandleFunc("/", func(rw http.ResponseWriter, r *http.Request) {
+		filename := r.URL.Path[1:]
+		t, err := template.ParseFiles("templates/layout.html", "templates/"+filename, "templates/foot.html")
+		if err != nil {
+			http.NotFound(rw, r)
+			return
+		}
+
+		//t.Execute(rw, nil) // 默认执行layout.html 那么index.html,home.html中就无需写{{ template "layout.html"}}
+		t.ExecuteTemplate(rw, filename, nil)
+	})
+
+	http.ListenAndServe(":8080", nil)
+}
+
+```
+
+```html
+###################### layout.html:
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>layout</title>
+  </head>
+  <body>
+    <h1>hello</h1>
+    {{ block "content" .}}{{ end }} 
+    
+    {{ template "foot" . }}
+  </body>
+</html>
+
+
+###################### foot.html
+
+{{ define "foot" }}
+<p>foot...</p>
+{{ end }}
+
+
+###################### index.html
+
+{{ template "layout.html"}} 
+
+{{ define "content" }}
+<p>index</p>
+{{ end }}
+
+
+###################### home.html
+
+{{ template "layout.html"}} 
+
+{{ define "content" }}
+<p>home</p>
+{{ end }}
+
+```
+
+
+
+# golang 数据库
+
+
+
+
+
+
+
 
 
